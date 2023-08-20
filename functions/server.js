@@ -1,3 +1,4 @@
+const serverless = require("serverless-http");
 const express = require("express");
 const app = express();
 const cors = require("cors");
@@ -127,8 +128,10 @@ app.post("/api/persons", (request, response) => {
 
 app.use(unknownEndpoint);
 
-const PORT = process.env.PORT || 3001;
+// const PORT = process.env.PORT || 3001;
+// app.listen(PORT, () => {
+//   console.log(`Server running on port ${PORT}`);
+// });
 
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+// Export your Express app wrapped with serverless
+module.exports.handler = serverless(app);
