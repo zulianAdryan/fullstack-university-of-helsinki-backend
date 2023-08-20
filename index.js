@@ -1,22 +1,35 @@
 const express = require("express");
+const morgan = require("morgan");
+
 const app = express();
 app.use(express.json());
+app.use(express.static("dist"));
 
-let notes = [
+morgan.token("body", (request) =>
+  request.method === "POST" ? JSON.stringify(request.body) : ""
+);
+app.use(morgan(":method :url :status :response-time ms :body"));
+
+let persons = [
   {
     id: 1,
-    content: "HTML is easy",
-    important: true,
+    name: "Arto Hellas",
+    number: "040-123456",
   },
   {
     id: 2,
-    content: "Browser can execute only JavaScript",
-    important: false,
+    name: "Ada Lovelace",
+    number: "39-44-5323523",
   },
   {
     id: 3,
-    content: "GET and POST are the most important methods of HTTP protocol",
-    important: true,
+    name: "Dan Abramov",
+    number: "12-43-234345",
+  },
+  {
+    id: 4,
+    name: "Mary Poppendieck",
+    number: "39-23-6423122",
   },
 ];
 
@@ -24,53 +37,77 @@ app.get("/", (request, response) => {
   response.send("<h1>Hello World!</h1>");
 });
 
-app.get("/api/notes", (request, response) => {
-  response.json(notes);
+app.get("/api/persons", (request, response) => {
+  response.json(persons);
 });
 
-app.get("/api/notes/:id", (request, response) => {
-  const id = Number(request.params.id);
-  const note = notes.find((note) => note.id === id);
+app.get("/api/info", (request, response) => {
+  const date = new Date();
+  response.send(`
+    <p>Phonebook has info for ${persons.length} people<br/></p>
+    <p>${date}</p>
+  `);
+});
 
-  if (note) {
-    response.json(note);
+app.get("/api/persons/:id", (request, response) => {
+  const id = Number(request.params.id);
+  const person = persons.find((person) => person.id === id);
+
+  if (person) {
+    response.json(person);
   } else {
-    // response.statusMessage = "Note does not exist";
+    response.statusMessage = "Person does not exist";
     response.status(404).end();
   }
 });
 
+app.delete("/api/persons/:id", (request, response) => {
+  const id = Number(request.params.id);
+  persons = persons.filter((person) => person.id !== id);
+
+  response.status(204).end();
+});
+
 const generateId = () => {
-  const maxId = notes.length > 0 ? Math.max(...notes.map((n) => n.id)) : 0;
-  return maxId + 1;
+  const min = 1;
+  const max = Number.MAX_SAFE_INTEGER;
+  const randomId = Math.floor(Math.random() * (max - min + 1)) + min;
+  if (persons.some((person) => person.id === randomId)) {
+    generateId();
+  } else {
+    return randomId;
+  }
 };
 
-app.post("/api/notes", (request, response) => {
+app.post("/api/persons", (request, response) => {
   const body = request.body;
-  console.log(body);
+  // console.log(body);
 
-  if (!body.content) {
+  if (!body.name) {
     return response.status(400).json({
-      error: "content missing",
+      error: "name is missing",
+    });
+  } else if (!body.number) {
+    return response.status(400).json({
+      error: "number is missing",
     });
   }
 
-  const note = {
-    content: body.content,
-    important: body.important || false,
+  if (persons.some((person) => person.name === body.name)) {
+    return response.status(400).json({
+      error: "name must be unique",
+    });
+  }
+
+  const person = {
     id: generateId(),
+    name: body.name,
+    number: body.number,
   };
 
-  notes = notes.concat(note);
+  persons = persons.concat(person);
 
-  response.json(note);
-});
-
-app.delete("/api/notes/:id", (request, response) => {
-  const id = Number(request.params.id);
-  notes = notes.filter((note) => note.id !== id);
-
-  response.status(204).end();
+  response.json(person);
 });
 
 const PORT = 3001;
