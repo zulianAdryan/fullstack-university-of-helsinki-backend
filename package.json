@@ -4,6 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
+    "build": "echo 'No build required'",
     "start": "node index.js",
     "dev": "nodemon index.js",
     "start-notes": "node index-notes.js",
