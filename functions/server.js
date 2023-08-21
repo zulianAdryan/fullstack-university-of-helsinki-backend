@@ -1,6 +1,7 @@
-const serverless = require("serverless-http");
 const express = require("express");
+const serverless = require("serverless-http");
 const app = express();
+const router = express.Router();
 const cors = require("cors");
 const morgan = require("morgan");
 
@@ -16,15 +17,15 @@ const unknownEndpoint = (request, response) => {
   response.status(404).send({ error: "unknown endpoint" });
 };
 
-app.use(express.json());
-app.use(cors());
-app.use(requestLogger);
-app.use(express.static("dist"));
+router.use(express.json());
+router.use(cors());
+router.use(requestLogger);
+router.use(express.static("dist"));
 
 morgan.token("body", (request) =>
   request.method === "POST" ? JSON.stringify(request.body) : ""
 );
-app.use(morgan(":method :url :status :response-time ms :body"));
+router.use(morgan(":method :url :status :response-time ms :body"));
 
 let persons = [
   {
@@ -49,15 +50,16 @@ let persons = [
   },
 ];
 
-app.get("/", (request, response) => {
-  response.send("<h1>Hello World!</h1>");
+router.get("/", (request, response) => {
+  // response.send("<h1>Hello World!</h1>");
+  response.send("app is running...");
 });
 
-app.get("/api/persons", (request, response) => {
+router.get("/api/persons", (request, response) => {
   response.json(persons);
 });
 
-app.get("/api/info", (request, response) => {
+router.get("/api/info", (request, response) => {
   const date = new Date();
   response.send(`
     <p>Phonebook has info for ${persons.length} people<br/></p>
@@ -65,7 +67,7 @@ app.get("/api/info", (request, response) => {
   `);
 });
 
-app.get("/api/persons/:id", (request, response) => {
+router.get("/api/persons/:id", (request, response) => {
   const id = Number(request.params.id);
   const person = persons.find((person) => person.id === id);
 
@@ -77,7 +79,7 @@ app.get("/api/persons/:id", (request, response) => {
   }
 });
 
-app.delete("/api/persons/:id", (request, response) => {
+router.delete("/api/persons/:id", (request, response) => {
   const id = Number(request.params.id);
   persons = persons.filter((person) => person.id !== id);
 
@@ -95,7 +97,7 @@ const generateId = () => {
   }
 };
 
-app.post("/api/persons", (request, response) => {
+router.post("/api/persons", (request, response) => {
   const body = request.body;
   // console.log(body);
 
@@ -126,12 +128,13 @@ app.post("/api/persons", (request, response) => {
   response.json(person);
 });
 
-app.use(unknownEndpoint);
+router.use(unknownEndpoint);
 
 // const PORT = process.env.PORT || 3001;
-// app.listen(PORT, () => {
+// router.listen(PORT, () => {
 //   console.log(`Server running on port ${PORT}`);
 // });
 
-// Export your Express app wrapped with serverless
+// Export your Express router wrapped with serverless
+app.use("/.netlify/functions/server", router);
 module.exports.handler = serverless(app);
