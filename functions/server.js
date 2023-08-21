@@ -1,9 +1,11 @@
-const express = require("express");
+require("dotenv").config();
 const serverless = require("serverless-http");
+const express = require("express");
 const app = express();
 const router = express.Router();
 const cors = require("cors");
 const morgan = require("morgan");
+const Person = require("../models/person");
 
 const requestLogger = (request, response, next) => {
   console.log("Method:", request.method);
@@ -13,122 +15,111 @@ const requestLogger = (request, response, next) => {
   next();
 };
 
-const unknownEndpoint = (request, response) => {
-  response.status(404).send({ error: "unknown endpoint" });
-};
-
-router.use(express.json());
-router.use(cors());
-router.use(requestLogger);
 router.use(express.static("dist"));
+router.use(express.json());
+router.use(requestLogger);
+router.use(cors());
 
+// morgan
 morgan.token("body", (request) =>
   request.method === "POST" ? JSON.stringify(request.body) : ""
 );
 router.use(morgan(":method :url :status :response-time ms :body"));
 
-let persons = [
-  {
-    id: 1,
-    name: "Arto Hellas",
-    number: "040-123456",
-  },
-  {
-    id: 2,
-    name: "Ada Lovelace",
-    number: "39-44-5323523",
-  },
-  {
-    id: 3,
-    name: "Dan Abramov",
-    number: "12-43-234345",
-  },
-  {
-    id: 4,
-    name: "Mary Poppendieck",
-    number: "39-23-6423122",
-  },
-];
-
 router.get("/", (request, response) => {
-  // response.send("<h1>Hello World!</h1>");
-  response.send("app is running...");
+  response.send("<h1>Hello World!</h1>");
 });
 
-router.get("/api/persons", (request, response) => {
-  response.json(persons);
+router.get("/api/persons", (request, response, next) => {
+  Person.find({})
+    .then((_persons) => {
+      console.log("persons", _persons);
+      response.json(_persons);
+    })
+    .catch((error) => next(error));
 });
 
 router.get("/api/info", (request, response) => {
-  const date = new Date();
-  response.send(`
-    <p>Phonebook has info for ${persons.length} people<br/></p>
-    <p>${date}</p>
-  `);
+  Person.countDocuments().then((length) => {
+    const date = new Date();
+    response.send(
+      `<div><p>Phonebook has info for ${length} people</p><p>${date}</p></div>`
+    );
+  });
 });
 
-router.get("/api/persons/:id", (request, response) => {
-  const id = Number(request.params.id);
-  const person = persons.find((person) => person.id === id);
-
-  if (person) {
-    response.json(person);
-  } else {
-    response.statusMessage = "Person does not exist";
-    response.status(404).end();
-  }
+router.get("/api/persons/:id", (request, response, next) => {
+  Person.findById(request.params.id)
+    .then((person) => {
+      if (person) {
+        response.json(person);
+      } else {
+        response.statusMessage = "Person does not exist";
+        response.status(404).end();
+      }
+    })
+    .catch((error) => next(error));
 });
 
-router.delete("/api/persons/:id", (request, response) => {
-  const id = Number(request.params.id);
-  persons = persons.filter((person) => person.id !== id);
-
-  response.status(204).end();
+router.delete("/api/persons/:id", (request, response, next) => {
+  Person.findByIdAndDelete(request.params.id)
+    .then(() => response.status(204).end())
+    .catch((error) => next(error));
 });
 
-const generateId = () => {
-  const min = 1;
-  const max = Number.MAX_SAFE_INTEGER;
-  const randomId = Math.floor(Math.random() * (max - min + 1)) + min;
-  if (persons.some((person) => person.id === randomId)) {
-    generateId();
-  } else {
-    return randomId;
-  }
-};
-
-router.post("/api/persons", (request, response) => {
+router.put("/api/persons/:id", (request, response, next) => {
   const body = request.body;
-  // console.log(body);
-
-  if (!body.name) {
-    return response.status(400).json({
-      error: "name is missing",
-    });
-  } else if (!body.number) {
-    return response.status(400).json({
-      error: "number is missing",
-    });
-  }
-
-  if (persons.some((person) => person.name === body.name)) {
-    return response.status(400).json({
-      error: "name must be unique",
-    });
-  }
 
   const person = {
-    id: generateId(),
     name: body.name,
     number: body.number,
   };
 
-  persons = persons.concat(person);
-
-  response.json(person);
+  Person.findByIdAndUpdate(request.params.id, person, {
+    new: true,
+    runValidators: true,
+    context: "query",
+  })
+    .then((updatedPerson) => {
+      response.json(updatedPerson);
+    })
+    .catch((error) => next(error));
 });
 
+router.post("/api/persons", (request, response, next) => {
+  const body = request.body;
+
+  const newPerson = new Person({
+    name: body.name,
+    number: body.number,
+  });
+
+  newPerson
+    .save()
+    .then((savedPerson) => {
+      response.json(savedPerson);
+    })
+    .catch((error) => next(error));
+});
+
+// handler of requests with unknown endpoint
+const unknownEndpoint = (request, response) => {
+  response.status(404).send({ error: "unknown endpoint" });
+};
 router.use(unknownEndpoint);
+
+// this has to be the last loaded middleware.
+const errorHandler = (error, request, response, next) => {
+  console.error(error.message);
+  if (error.name === "CastError") {
+    return response.status(400).send({ error: "malformatted id" });
+  } else if (error.name === "ValidationError") {
+    return response.status(400).json({ error: error.message });
+  }
+
+  next(error);
+};
+router.use(errorHandler);
 
 // const PORT = process.env.PORT || 3001;
 // router.listen(PORT, () => {
